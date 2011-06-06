@@ -1,0 +1,39 @@
+lua_maparray provides a simple class and a tiny collection of basic
+functions for straightforward and compact mapping 1D arrays
+
+The class Map allows one to construct lambda functions without complicated
+native Lua syntax. These functions may be used in-place to map arrays. Though
+it's an intended purpose of the class, these functions can be used anywhere
+one needs lambdas.
+
+For to shortcut a constructing new instances of Map class, there's a wrapper
+function wrap().
+
+There are two general purpose functions map() and mapa() to iterate the
+given array and apply the given function to each element. map() traverses
+only indexed part of the table, while mapa() uses pairs() for iterating.
+Mapping occures in-place, with a side-effect on the given table. Functions
+return the table.
+
+The only difference of these functions from well-known [from other languages]
+analog is that these ones receives array (table) as their 1st parameter and
+map-function as the 2nd parameter. It's a natural order for object-oriented
+fashion, hence it's implemented here.
+
+No reason why one should use map() and mapa() from this module. They are
+included because Lua does not provide built-in anything like these.
+
+No module description can be complete without any example code. Here it goes:
+
+local map = require "maparray";
+local _ = map.wrap;
+local sequence = {0, 1, 2, 3, 4};
+-- return negations of squares
+map.map(sequence, - _() * _());
+-- native syntax for lambda function would be like this:
+-- map.map(sequence, function(a) return - a * a end);
+-- print altered sequence
+print(unpack(sequence));
+
+See test.lua for more examples.
+
