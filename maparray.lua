@@ -9,8 +9,8 @@ local Lambda = {} do
 	local _assert = assert;
 	if not _assert then return false end;
 	local _getmetatable = _assert(getmetatable);
-	local _newproxy = _assert( newproxy );
-	local _select = _assert(select);
+	local _rawequal = _assert( rawequal );
+	local _select = _assert( select );
 	local _setmetatable = _assert(setmetatable);
 	local _table = _assert(table);
 	local _type = _assert(type);
@@ -27,6 +27,7 @@ local Lambda = {} do
 
 	function Lambda.lt(a, b) return a < b end;
 	function Lambda.index(t, k) return t[k] end;
+	Lambda[""] = function(...) return ... end;
 
 	Lambda["%"] = function(a, b) return a % b end;
 	Lambda["^"] = function(a, b) return a ^ b end;
@@ -42,6 +43,7 @@ local Lambda = {} do
 	Lambda["<="] = function(a, b) return a <= b end;
 	Lambda[">"] = function(a, b) return a > b end;
 	Lambda[">="] = function(a, b) return a >= b end;
+	Lambda["=="] = function(a, b) return a == b end;
 
 	local function _is_Lambda(obj)
 		return _getmetatable(obj) == _mt_Lambda;
@@ -55,7 +57,7 @@ local Lambda = {} do
 	local function _params(self, cx, step, init, ...)
 		if cx > #step then return end;
 		local val = step[cx];
-		if val == self then
+		if _rawequal(val, self) then
 			val = (...);
 		elseif _is_Lambda(val) then
 			val = val(_unpack_tbl(init, 1));
@@ -65,9 +67,9 @@ local Lambda = {} do
 
 	local function _run(self, step, init, ...)
 		local f = step[1];
-		if not f then return ... end;
+		if _rawequal(f, nil) then return ... end;
 		if _type(f) == "number" then return init[f] end;
-		if f == self then return init[1] end;
+		if _rawequal(f, self) then return init[1] end;
 		return f(_params(self, 2, step, init, ...));
 	end;
 
@@ -94,6 +96,7 @@ local Lambda = {} do
 		a[_stack]:insert {Lambda["-"], a};
 		return a;
 	end;
+	_mt_Lambda["__eq"] = _make_oper "==";
 	_mt_Lambda["__add"] = _make_oper "+";
 	_mt_Lambda["__sub"] = _make_oper "-";
 	_mt_Lambda["__mul"] = _make_oper "*";

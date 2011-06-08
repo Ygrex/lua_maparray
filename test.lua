@@ -13,7 +13,7 @@ local integer = {0, 1, 2, 3, 4, 5};
 -- print out the table content
 local function write(tbl)
 	for i = 1, #tbl, 1 do
-		io.write("\t", integer[i], " -> ", tbl[i], "\n");
+		io.write("\t", tostring(integer[i]), " -> ", tostring(tbl[i]), "\n");
 	end;
 end;
 
@@ -37,6 +37,8 @@ io.write "letter equivalents:\n"
 write( map.map(cp(integer), L(string.char, L() + ("A"):byte()) ) );
 io.write "map even integers:\n"
 write( map.map(cp(integer), 1 - L() % 2) );
+io.write "map even integers yielding booleans:\n"
+write( map.map(cp(integer), L "==" (1 - L() % 2, 1)) );
 io.write "format sequence output with a map function:\n"
 write( map.map(cp(integer), "Integer #" .. (L() + 1) .. ": " .. L() .. ";" ) );
 
