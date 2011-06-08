@@ -2,128 +2,140 @@
 	Map - module to map 1D arrays
 --]]
 
--- {{{ Map - operator stack
-local Map = {} do
-	-- metatable for instances of `Map`
-	local _mt_Map = { ["__index"] = Map };
+-- {{{ Lambda - Lambda-functions constructor
+local Lambda = {} do
 
-	-- required globals
-	local _assert		= assert;
-	if not assert then return false end;
-	local _getmetatable	= _assert( getmetatable );
-	local _rawequal		= _assert( rawequal );
-	local _setmetatable	= _assert( setmetatable );
-	local _type		= _assert( type );
+	-- {{{ global scope dependencies
+	local _assert = assert;
+	if not _assert then return false end;
+	local _getmetatable = _assert(getmetatable);
+	local _newproxy = _assert( newproxy );
+	local _select = _assert(select);
+	local _setmetatable = _assert(setmetatable);
+	local _table = _assert(table);
+	local _type = _assert(type);
+	-- }}} global scope dependencies
 
-	-- identifier of unary functions
-	local _unary = {};
+	-- some different value, where stack to store
+	local _stack = {};
+	-- Lambda metatable
+	local _mt_Lambda = {};
+	Lambda["mt"] = _mt_Lambda;
 
-	-- make table with global `table` as index
-	local _new_table do
-		local _mt_table = { ["__index"] = table };
-		_new_table = function()
-			return _setmetatable({}, _mt_table);
+	local _mt_table = { ["__index"] = _table };
+	local _new_table = function() return _setmetatable({}, _mt_table) end;
+
+	function Lambda.lt(a, b) return a < b end;
+	function Lambda.index(t, k) return t[k] end;
+
+	Lambda["%"] = function(a, b) return a % b end;
+	Lambda["^"] = function(a, b) return a ^ b end;
+	Lambda["-"] = function(a, b)
+		if not b then return -a end;
+		return a - b;
+	end;
+	Lambda["+"] = function(a, b) return a + b end;
+	Lambda["/"] = function(a, b) return a / b end;
+	Lambda["*"] = function(a, b) return a * b end;
+	Lambda[".."] = function(a, b) return a .. b end;
+	Lambda["<"] = function(a, b) return a < b end;
+	Lambda["<="] = function(a, b) return a <= b end;
+	Lambda[">"] = function(a, b) return a > b end;
+	Lambda[">="] = function(a, b) return a >= b end;
+
+	local function _is_Lambda(obj)
+		return _getmetatable(obj) == _mt_Lambda;
+	end;
+
+	local function _unpack_tbl(tbl, cx)
+		if tbl["n"] < cx then return end;
+		return tbl[cx], _unpack_tbl(tbl, cx + 1);
+	end;
+
+	local function _params(self, cx, step, init, ...)
+		if cx > #step then return end;
+		local val = step[cx];
+		if val == self then
+			val = (...);
+		elseif _is_Lambda(val) then
+			val = val(_unpack_tbl(init, 1));
+		end;
+		return val, _params(self, cx + 1, step, init, ...);
+	end;
+
+	local function _run(self, step, init, ...)
+		local f = step[1];
+		if not f then return ... end;
+		if _type(f) == "number" then return init[f] end;
+		if f == self then return init[1] end;
+		return f(_params(self, 2, step, init, ...));
+	end;
+
+	local function _call(self, cx, init, ...)
+		local step = self[_stack][cx];
+		if not step then return ... end;
+		return _call(
+			self, cx + 1, init,
+			_run(self, step, init, ...)
+		);
+	end;
+
+	function _make_oper(oper)
+		return function(a, b)
+			local obj = a;
+			if not _is_Lambda(obj) then obj = b end;
+			obj[_stack]:insert {Lambda[oper], a, b};
+			return obj;
 		end;
 	end;
 
-	-- make handler for binary operator
-	local function _handler(meth)
-		return function(self, val)
-			local rev;
-			if _getmetatable(self) ~= _mt_Map then
-				self, val = val, self;
-				rev = true;
+	_mt_Lambda["__concat"] = _make_oper "..";
+	_mt_Lambda["__unm"] = function(a)
+		a[_stack]:insert {Lambda["-"], a};
+		return a;
+	end;
+	_mt_Lambda["__add"] = _make_oper "+";
+	_mt_Lambda["__sub"] = _make_oper "-";
+	_mt_Lambda["__mul"] = _make_oper "*";
+	_mt_Lambda["__div"] = _make_oper "/";
+	_mt_Lambda["__mod"] = _make_oper "%";
+	_mt_Lambda["__pow"] = _make_oper "^";
+	_mt_Lambda["__index"] = function(tbl, k)
+		tbl[_stack]:insert {Lambda.index, tbl, k};
+		return tbl;
+	end;
+
+	local function _pack_tbl(...)
+		return {["n"] = _select("#", ...), ...};
+	end;
+
+	_mt_Lambda["__call"] = function(self, ...)
+		return _call(self, 1, _pack_tbl(...), ...);
+	end;
+
+	function Lambda:apply_params(obj, func, ...)
+		obj[_stack]:insert {func, ...}
+		return obj;
+	end;
+
+	-- {{{ Lambda:new(…) - constructor
+	--	... - is a number for parameter placeholder or
+	--		function with argument list
+	function Lambda:new(...)
+		local operator = (...);
+		if operator and _type(operator) == "string" then
+			local operator = self[operator];
+			return function(...)
+				return self:new(operator, ...);
 			end;
-			self["queue"]:insert {self[meth], val, rev};
-			return self;
 		end;
+		local p = _setmetatable({[_stack] = _new_table()}, _mt_Lambda);
+		self:apply_params(p, ...);
+		return p;
 	end;
-
-	-- make handler for unary operator
-	local function _handler_unary(meth)
-		return function(self)
-			self["queue"]:insert {self[meth], _unary};
-			return self;
-		end;
-	end;
-
-	-- add functions to queue, when statement is preparing
-	_mt_Map["__add"] = _handler "add";
-	_mt_Map["__sub"] = _handler "sub";
-	_mt_Map["__mul"] = _handler "mul";
-	_mt_Map["__div"] = _handler "div";
-	_mt_Map["__mod"] = _handler "mod";
-	_mt_Map["__pow"] = _handler "pow";
-	_mt_Map["__unm"] = _handler_unary "unm";
-	_mt_Map["__concat"] = _handler "concat";
---[[
-	these methods cannot be wrapped, for they always return true/false
-	_mt_Map["__eq"] = _handler "eq";
-	_mt_Map["__lt"] = _handler "lt";
-	_mt_Map["__le"] = _handler "le";
---]]
-
-	-- make stacked evaluations
-	local function _call(self, initval, val, cx)
-		local o = self["queue"][cx];
-		if not o then return val end;
-		local b = o[2];
-		if _getmetatable(b) == _mt_Map then
-			if _rawequal(b, self) then
-				-- do not call `self` to avoid inf loop;
-				-- place initial value instead
-				b = initval;
-			else
-				-- call wrapped function(s)
-				b = b(initval);
-			end;
-		end;
-		if o[3] then val, b = b, val end;
-		if _rawequal(b, _unary) then
-			val = o[1](val);
-		else
-			val = o[1](val, b);
-		end;
-		return _call(self, initval, val, cx + 1);
-	end;
-
-	-- mapper
-	function _mt_Map:__call(val) return _call(self, val, val, 1) end;
-
-	-- operators cannot be referred to and placed unto the stack,
-	-- wrap them with functions in order to do the trick
-	function Map.add(a, b)		return a + b end;
-	function Map.concat(a, b)	return a .. b end;
-	function Map.div(a, b)		return a / b end;
-	function Map.eq(a, b)		print "here" return a == b end;
-	function Map.ge(a, b)		return a >= b end;
-	function Map.gt(a, b)		return a > b end;
-	function Map.le(a, b)		return a <= b end;
-	function Map.lt(a, b)		return a < b end;
-	function Map.mod(a, b)		return a % b end;
-	function Map.mul(a, b)		return a * b end;
-	function Map.n(a)		return not a end;
-	function Map.pow(a, b)		return a ^ b end;
-	function Map.sub(a, b)		return a - b end;
-	function Map.unm(a)		return -a end;
-
-	-- constructor
-	do
-		-- fill stack `tbl` with given functions
-		local function _fill(tbl, func, ...)
-			if func == nil then return tbl end;
-			tbl:insert {func, _unary};
-			return _fill(tbl, ...);
-		end;
-
-		function Map:new(...)
-			local q = _fill(_new_table(), ...);
-			return _setmetatable({["queue"] = q}, _mt_Map);
-		end;
-	end;
-
+	-- }}} Lambda:new()
 end;
--- }}} Map
+-- }}} Lambda
 
 -- map array
 local function map(array, func)
@@ -138,10 +150,10 @@ local function mapa(array, func)
 end;
 
 -- Map wrapper for functions
-local function wrap(...) return Map:new(...) end;
+local function wrap(...) return Lambda:new(...) end;
 
 return {
-	["Map"]		= Map,
+	["Lambda"]	= Lambda,
 	["map"]		= map,
 	["mapa"]	= mapa,
 	["wrap"]	= wrap,

@@ -1,5 +1,5 @@
 local map = require "maparray";
-local _ = map.wrap;
+local L = map.wrap;
 
 -- make a copy of the given table
 local function cp(tbl)
@@ -17,14 +17,29 @@ local function write(tbl)
 	end;
 end;
 
+--[[
+local city = {
+	{ ["name"] = "Helsinky" },
+	{ ["name"] = "Riga" },
+	{ ["name"] = "Moscow" },
+	{ ["name"] = "Rome" },
+	{ ["name"] = "Washington" },
+	{ ["name"] = "Grozny" },
+};
+l = L "<" (L(1)["name"], L(2)["name"]);
+_ = function(...) return l(...) end;
+table.sort(city, _);
+for i = 1, #city, 1 do print(i, city[i]["name"]) end;
+--]]
 io.write "negations of squares:\n"
-write( map.map(cp(integer), - _() * _()) );
+write( map.map(cp(integer), - L() * L()) );
 io.write "letter equivalents:\n"
-write( map.map(cp(integer), _(_() + ("A"):byte(), string.char) ) );
+write( map.map(cp(integer), L(string.char, L() + ("A"):byte()) ) );
 io.write "map even integers:\n"
-write( map.map(cp(integer), 1 - _() % 2) );
+write( map.map(cp(integer), 1 - L() % 2) );
 io.write "format sequence output with a map function:\n"
-write( map.map(cp(integer), "Integer #" .. (_() + 1) .. ": " .. _() .. ";" ) );
+write( map.map(cp(integer), "Integer #" .. (L() + 1) .. ": " .. L() .. ";" ) );
+
 
 --[[
 -- same examples with regular Lua syntax:
